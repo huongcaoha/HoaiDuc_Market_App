@@ -3,8 +3,7 @@ import axios from "axios";
 
 
 const baseUrl = axios.create({
-    // baseURL: "http://192.168.1.233:8080/api.hoaiducmarket.com/v1",
-    baseURL: "http://localhost:3000",
+    baseURL: "http://192.168.1.233:8080/api.hoaiducmarket.com/v1",
     timeout: 10000,
     headers: {
         "Content-Type": "application/json"
@@ -46,6 +45,7 @@ baseUrl.interceptors.response.use(async (response) => {
 
 
     }
+    return response;
 })
 
 export default baseUrl;

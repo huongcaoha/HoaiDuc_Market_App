@@ -1,13 +1,14 @@
 import baseUrl from '@/apis/baseUrl';
+import OTPModal from '@/components/OTPModal';
 import useDebounce from '@/hooks/useDebounce';
 import { UserRegister } from '@/types/type';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
-    FlatList,
     Image,
     KeyboardAvoidingView,
+
     Platform,
     ScrollView,
     StatusBar,
@@ -21,25 +22,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 
 const Register = ({ navigation }: { navigation: any }) => {
-    const [users, setUsers] = useState([]);
+
     const [isLoading, setIsLoading] = useState<boolean>(false);
-    useEffect(() => {
-        const fetchUsers = async () => {
-            try {
-                setIsLoading(true);
-                const response = await baseUrl.get("/users");
-                console.log(JSON.stringify(response.data));
-
-                // setUsers(response.data);
-
-            } catch (error) {
-                alert(error)
-            } finally {
-                setIsLoading(false);
-            }
-        }
-        fetchUsers();
-    }, [])
     const [userRegister, setUserRegister] = useState<UserRegister>({
         fullName: '',
         email: '',
@@ -63,6 +47,23 @@ const Register = ({ navigation }: { navigation: any }) => {
     const debouncedEmail = useDebounce(userRegister.email, 200);
     const debouncedPhone = useDebounce(userRegister.phone, 200);
     const debouncedPassword = useDebounce(userRegister.password, 200);
+    const [otp, setOtp] = useState<number | null>(null);
+    const [modalOTP, setModalOTP] = useState<boolean>(false);
+    const [inputOTP, setInputOTP] = useState<number>(0);
+    const debouncedInputOTP = useDebounce(inputOTP, 200);
+
+
+    const handleCloseModalOTP = () => {
+        setModalOTP(false);
+        setOtp(null);
+        setInputOTP(0);
+    };
+
+    const handleOpenModalOTP = async () => {
+        setModalOTP(true);
+        const response = await baseUrl.get(`/auth/sendOTP?to=${debouncedEmail}`);
+        setOtp(response.data.data);
+    };
 
     // Theo dõi sự thay đổi và cập nhật giá trị đã debounce
     useEffect(() => {
@@ -81,18 +82,19 @@ const Register = ({ navigation }: { navigation: any }) => {
         });
     };
 
-    const checkValidateData = () => {
+    const checkValidateData = async () => {
         let isValid = true;
 
         const patternEmail = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
         const patternPhone = /^0[35789][0-9]{8}$/;
-
-        if (debouncedFullName === "") {
+        const responsePhone = await baseUrl.get(`/auth/checkPhoneExisted?phone=${debouncedPhone}`);
+        const responseEmail = await baseUrl.get(`/auth/checkEmailExisted?email=${debouncedEmail}`);
+        if (debouncedFullName === "" || debouncedFullName.length > 30) {
             isValid = false;
             setUserRegisterError((pre) => {
                 return {
                     ...pre,
-                    fullName: "Họ và Tên không được để trống"
+                    fullName: "Họ và Tên không được để trống và tối đa 30 ký tự"
                 }
             });
         } else {
@@ -112,6 +114,22 @@ const Register = ({ navigation }: { navigation: any }) => {
                     email: "Email không được để trống"
                 }
             });
+        } else if (patternEmail.test(debouncedEmail) === false) {
+            isValid = false;
+            setUserRegisterError((pre) => {
+                return {
+                    ...pre,
+                    email: "Email không hợp lệ"
+                }
+            });
+        } else if (responseEmail.data.data > 0) {
+            isValid = false;
+            setUserRegisterError((pre) => {
+                return {
+                    ...pre,
+                    email: "Email đã tồn tại"
+                }
+            });
         } else {
             setUserRegisterError((pre) => {
                 return {
@@ -121,22 +139,7 @@ const Register = ({ navigation }: { navigation: any }) => {
             });
         }
 
-        if (patternEmail.test(debouncedEmail) === false) {
-            isValid = false;
-            setUserRegisterError((pre) => {
-                return {
-                    ...pre,
-                    email: "Email không hợp lệ"
-                }
-            });
-        } else {
-            setUserRegisterError((pre) => {
-                return {
-                    ...pre,
-                    email: ""
-                }
-            });
-        }
+
 
         if (debouncedPassword === "") {
             isValid = false;
@@ -155,6 +158,10 @@ const Register = ({ navigation }: { navigation: any }) => {
             });
         }
 
+
+
+
+
         if (debouncedPhone === "") {
             isValid = false;
             setUserRegisterError((pre) => {
@@ -163,16 +170,15 @@ const Register = ({ navigation }: { navigation: any }) => {
                     phone: "Số điện thoại không được để trống"
                 }
             });
-        } else {
+        } else if (responsePhone.data.data > 0) {
+            isValid = false;
             setUserRegisterError((pre) => {
                 return {
                     ...pre,
-                    phone: ""
+                    phone: "Số điện thoại đã tồn tại "
                 }
             });
-        }
-
-        if (patternPhone.test(debouncedPhone) === false) {
+        } else if (patternPhone.test(debouncedPhone) === false) {
             isValid = false;
             setUserRegisterError((pre) => {
                 return {
@@ -193,17 +199,26 @@ const Register = ({ navigation }: { navigation: any }) => {
     }
 
     const handleSignUp = async () => {
-        const isValid = checkValidateData();
+        const isValid = await checkValidateData();
+
 
         if (!agreedToTerms) {
             Alert.alert('Lỗi', 'Bạn phải đồng ý với Điều khoản & Dịch vụ.');
-            // alert("Bạn phải đồng ý với Điều khoản & Dịch vụ.")
+
             return;
         }
 
         if (!isValid) {
             return;
         } else {
+
+            handleOpenModalOTP();
+        }
+
+    };
+
+    const handleRegister = async () => {
+        if (debouncedInputOTP === otp) {
             try {
                 setIsLoading(true);
                 const response = await baseUrl.post("/auth/register", debouncedUserRegister);
@@ -212,20 +227,21 @@ const Register = ({ navigation }: { navigation: any }) => {
                 if (response.data.status === 201) {
                     Alert.alert("Thành Công", "Đăng ký thành công !");
                     navigation.navigate("Login");
-                } else {
-                    Alert.alert("Lỗi", "Đăng ký thất bại !");
                 }
             } catch (error) {
                 Alert.alert("Lỗi", error.message);
             } finally {
                 setIsLoading(false);
             }
+        } else {
+            Alert.alert("Lỗi", "Mã OTP không đúng !");
         }
 
-    };
+    }
 
     return (
         <SafeAreaView style={styles.container}>
+            <OTPModal modalOTP={modalOTP} handleCloseModalOTP={handleCloseModalOTP} inputOTP={inputOTP} setInputOTP={setInputOTP} handleRegister={handleRegister} />
             <StatusBar barStyle="dark-content" />
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -332,16 +348,6 @@ const Register = ({ navigation }: { navigation: any }) => {
                 </ScrollView>
             </KeyboardAvoidingView>
 
-            <FlatList
-                data={users}
-                renderItem={({ item }) => <Text>{item.username}</Text>}
-                keyExtractor={(item) => item.id.toString()}
-                ListEmptyComponent={() => <Text>No Data</Text>}
-            />
-
-            {
-                isLoading && <ActivityIndicator size="large" color="green" />
-            }
         </SafeAreaView>
     );
 };

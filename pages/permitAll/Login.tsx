@@ -1,3 +1,5 @@
+import baseUrl from '@/apis/baseUrl';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState } from 'react';
 import {
     Alert,
@@ -18,11 +20,25 @@ const Login = ({ navigation }: { navigation: any }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
 
-    const handleLogin = () => {
-        if (!email || !password) {
-            Alert.alert('Lỗi', 'Bạn chưa nhập email hoặc mật khẩu.');
+    const handleLogin = async () => {
+        const response = await baseUrl.post('/auth/login', {
+            email,
+            password,
+        });
+
+        if (response.data.data) {
+            await AsyncStorage.setItem('accessToken', JSON.stringify(response.data.data.accessToken));
+            await AsyncStorage.setItem('refreshToken', JSON.stringify(response.data.data.refreshToken));
+            await AsyncStorage.setItem('fullName', JSON.stringify(response.data.data.fullName));
+            await AsyncStorage.setItem('role', JSON.stringify(response.data.data.role));
+            await AsyncStorage.setItem('uuid', JSON.stringify(response.data.data.uuid));
+            if (response.data.data.role === "ADMIN") {
+                navigation.navigate("Admin");
+            } else {
+                navigation.navigate("App");
+            }
         } else {
-            Alert.alert('Đăng nhập thành công', `Chào mừng trở lại, ${email}!`);
+            Alert.alert('Lỗi', 'Email hoặc mật khẩu không đúng!');
         }
     };
 
